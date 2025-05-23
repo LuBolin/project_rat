@@ -1,5 +1,6 @@
 
 #include "PlayerCharacter.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 
 APlayerCharacter::APlayerCharacter()
@@ -8,10 +9,13 @@ APlayerCharacter::APlayerCharacter()
 	
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 300.0f;
-	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->TargetArmLength = 400.0f;\
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+
+	bUseControllerRotationYaw = false;
+	CameraBoom->bUsePawnControlRotation = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false; // so we can lerp the rotation
 }
 
 
@@ -39,33 +43,41 @@ void APlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 void APlayerCharacter::PanCamera(FVector2f Input)
 {
-	const FRotator CurrentRotation = Controller->GetControlRotation();
+	if (!Controller)
+		return;
+
+	FRotator CurrentRotation = Controller->GetControlRotation();
 	float NewPitch = CurrentRotation.Pitch + Input.Y;
-	// Normalize and clamp the pitch to avoid gimbal flips
-	NewPitch = FMath::ClampAngle(NewPitch, -90.f, 0.f);
-	float NewYaw = CurrentRotation.Yaw + Input.X;
-	// Apply new rotation: keep yaw and roll
-	FRotator NewControlRot = FRotator(NewPitch, NewYaw, CurrentRotation.Roll);
+	float NewYaw   = CurrentRotation.Yaw + Input.X;
+	NewPitch = FMath::Clamp(NewPitch, -80.f, 20.f); // -80 for top down, 20 for slight bottom up
+
+	FRotator NewControlRot = FRotator(NewPitch, NewYaw, 0.f);
 	Controller->SetControlRotation(NewControlRot);
 }
-
 
 void APlayerCharacter::MoveInDirection(FVector2f Direction)
 {
 	if (!Controller || Direction.IsNearlyZero())
 		return;
 
-	// Get yaw-only rotation (ignore pitch/roll)
-	const FRotator YawRotation(0, Controller->GetControlRotation().Yaw, 0);
+	FVector ForwardDir = FollowCamera->GetForwardVector();
+	FVector RightDir   = FollowCamera->GetRightVector();
+	ForwardDir.Z = 0.f; ForwardDir.Normalize();
+	RightDir.Z = 0.f; RightDir.Normalize();
 
-	// Forward and Right vectors from yaw
-	// UE world forward is X, right is Y
-	const FVector ForwardVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	const FVector RightVector = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	const FVector MoveDirection = ForwardDir * Direction.Y + RightDir * Direction.X;
 
-	// Move in direction relative to camera
-	AddMovementInput(ForwardVector, Direction.Y);
-	AddMovementInput(RightVector, Direction.X); 
+	AddMovementInput(MoveDirection.GetSafeNormal());
+
+	if (!MoveDirection.IsNearlyZero())
+	{
+		FRotator TargetRotation = MoveDirection.Rotation();
+		TargetRotation.Pitch = 0.f;
+		TargetRotation.Roll = 0.f;
+
+		SetActorRotation(FMath::RInterpTo(
+			GetActorRotation(), TargetRotation, GetWorld()->GetDeltaSeconds(), 10.f));
+	}
 }
 
 void APlayerCharacter::JumpWrapper(bool bPressed)
