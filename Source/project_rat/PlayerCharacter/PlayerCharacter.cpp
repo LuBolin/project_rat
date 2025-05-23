@@ -9,7 +9,7 @@ APlayerCharacter::APlayerCharacter()
 	
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f;\
+	CameraBoom->TargetArmLength = 200.0f;
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 
@@ -26,6 +26,8 @@ void APlayerCharacter::BeginPlay()
 	FIA_MousePan.AddDynamic(this, &APlayerCharacter::PanCamera);
 	FIA_PlaneMove.AddDynamic(this, &APlayerCharacter::MoveInDirection);
 	FIA_Jump.AddDynamic(this, &APlayerCharacter::JumpWrapper);
+
+	Controller->SetControlRotation(FRotator(-45.f, 0.f, 0.f));
 }
 
 
@@ -49,7 +51,7 @@ void APlayerCharacter::PanCamera(FVector2f Input)
 	FRotator CurrentRotation = Controller->GetControlRotation();
 	float NewPitch = CurrentRotation.Pitch + Input.Y;
 	float NewYaw   = CurrentRotation.Yaw + Input.X;
-	NewPitch = FMath::Clamp(NewPitch, -80.f, 20.f); // -80 for top down, 20 for slight bottom up
+	NewPitch = FMath::Clamp(NewPitch, -80.f, 10.f); // -80 for top down, 10 for slight bottom up
 
 	FRotator NewControlRot = FRotator(NewPitch, NewYaw, 0.f);
 	Controller->SetControlRotation(NewControlRot);
